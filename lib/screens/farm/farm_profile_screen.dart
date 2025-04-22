@@ -14,6 +14,7 @@ class FarmProfileScreen extends StatefulWidget {
 class _FarmProfileScreenState extends State<FarmProfileScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final user = FirebaseAuth.instance.currentUser;
+  Map<String, dynamic>? _selectedFarm;
 
   @override
   void initState() {
@@ -24,7 +25,10 @@ class _FarmProfileScreenState extends State<FarmProfileScreen> with SingleTicker
   void _showAddFarmDialog({Map<String, dynamic>? farmData, String? farmId}) {
     showDialog(
       context: context,
-      builder: (context) => AddFarmDialog(farmData: farmData, farmId: farmId),
+      builder: (context) => AddFarmDialog(
+        farmData: farmData,
+        farmId: farmId,
+      ),
     );
   }
 
@@ -41,7 +45,12 @@ class _FarmProfileScreenState extends State<FarmProfileScreen> with SingleTicker
       ),
     );
     if (confirmed == true) {
-      await FirebaseFirestore.instance.collection('users').doc(user!.uid).collection('farms').doc(farmId).delete();
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user!.uid)
+          .collection('farms')
+          .doc(farmId)
+          .delete();
     }
   }
 
@@ -73,7 +82,7 @@ class _FarmProfileScreenState extends State<FarmProfileScreen> with SingleTicker
             controller: _tabController,
             children: [
               _buildFarmsList(farms),
-              _buildFarmDetails(farms),
+              _buildFarmDetails(_selectedFarm),
             ],
           );
         },
@@ -111,18 +120,20 @@ class _FarmProfileScreenState extends State<FarmProfileScreen> with SingleTicker
                       PopupMenuItem(value: 'delete', child: Text('Delete')),
                     ],
                   ),
-                  onTap: () => _tabController.animateTo(1),
+                  onTap: () {
+                    setState(() => _selectedFarm = data);
+                    _tabController.animateTo(1);
+                  },
                 ),
               );
             },
           );
   }
 
-  Widget _buildFarmDetails(List<QueryDocumentSnapshot> farms) {
-    if (farms.isEmpty) {
+  Widget _buildFarmDetails(Map<String, dynamic>? data) {
+    if (data == null) {
       return const Center(child: Text('Pumili ng bukid para makita ang detalye.'));
     }
-    final data = farms.first.data() as Map<String, dynamic>;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Card(
