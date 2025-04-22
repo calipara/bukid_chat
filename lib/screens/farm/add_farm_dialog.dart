@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+
+import 'farm_map_screen.dart'; // ✅ make sure this file exists
 
 class AddFarmDialog extends StatefulWidget {
   final Map<String, dynamic>? farmData;
@@ -29,19 +32,20 @@ class _AddFarmDialogState extends State<AddFarmDialog> {
   String? _relationship;
   DateTime _selectedPlantingDate = DateTime.now();
   DateTime _expectedHarvestDate = DateTime.now().add(const Duration(days: 90));
+  List<LatLng>? _locationPolygon;
 
   final crops = ['Corn', 'Rice'];
   final units = ['Ektarya', 'Square Meters'];
   final waterSources = ['Irigasyon', 'Ulan'];
   final harvestUnits = ['Kilo', 'Cavan', 'Tonelada'];
   final relationships = ['Magulang', 'Asawa', 'Anak', 'Kapatid', 'Pinsan', 'Iba pa'];
-
   String? _loggedInUserName;
 
   @override
   void initState() {
     super.initState();
     final currentUser = FirebaseAuth.instance.currentUser;
+
     FirebaseFirestore.instance.collection('users').doc(currentUser?.uid).get().then((doc) {
       setState(() {
         _loggedInUserName = doc['name'] ?? '';
@@ -65,63 +69,30 @@ class _AddFarmDialogState extends State<AddFarmDialog> {
       _harvestUnit = data['harvestUnit'] ?? 'Kilo';
       _relationship = data['relationship'];
       _selectedPlantingDate = DateTime.tryParse(data['plantingDate'] ?? '') ?? DateTime.now();
-      _expectedHarvestDate = DateTime.tryParse(data['expectedHarvestDate'] ?? '') ?? DateTime.now().add(Duration(days: 90));
+      _expectedHarvestDate = DateTime.tryParse(data['expectedHarvestDate'] ?? '') ?? DateTime.now().add(const Duration(days: 90));
+      if (data['locationPolygon'] != null) {
+        _locationPolygon = List<Map<String, dynamic>>.from(data['locationPolygon'])
+            .map((e) => LatLng(e['lat'], e['lng']))
+            .toList();
+      }
     }
   }
 
-  Future<void> _saveFarm() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (!_formKey.currentState!.validate() || user == null) return;
-
-    final owner = _ownerController.text.trim();
-    final farmName = _farmNameController.text.trim();
-    final area = double.tryParse(_areaController.text.trim()) ?? 0;
-    final expectedHarvest = double.tryParse(_expectedHarvestAmountController.text.trim()) ?? 0;
-    final isOwnerSame = owner == _loggedInUserName;
-
-    // Check for relationship if different from login name
-    if (!isOwnerSame && (_relationship == null || widget.farmData != null && owner != widget.farmData!['ownerName'])) {
-      final relation = await _askRelationship();
-      if (relation == null || relation.isEmpty) return;
-      setState(() => _relationship = relation);
-    }
-
-    final farmData = {
-      'farmName': farmName,
-      'ownerName': owner,
-      'crop': _selectedCrop,
-      'area': area,
-      'unit': _unit,
-      'waterSource': _waterSource,
-      'organic': _isOrganic ? 'Yes' : 'No',
-      'plantingDate': _selectedPlantingDate.toIso8601String(),
-      'monthsBeforeHarvest': _monthsBeforeHarvest,
-      'expectedHarvestDate': DateFormat('yyyy-MM-dd').format(_expectedHarvestDate),
-      'expectedHarvestAmount': expectedHarvest,
-      'harvestUnit': _harvestUnit,
-      'createdAt': FieldValue.serverTimestamp(),
-    };
-
-    if (!isOwnerSame) farmData['relationship'] = _relationship;
-
-    try {
-      final ref = FirebaseFirestore.instance.collection('users').doc(user.uid).collection('farms');
-      if (widget.farmId != null) {
-        await ref.doc(widget.farmId).update(farmData);
-      } else {
-        await ref.add(farmData);
-      }
-
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ Tagumpay!')),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ Error: $e')),
-      );
+  Future<void> _selectLocation() async {
+    final result = await Navigator.push<List<LatLng>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FarmMapScreen(
+          onPolygonCompleted: (polygon) {
+            setState(() {
+              _locationPolygon = polygon;
+            });
+          },
+        ),
+      ),
+    );
+    if (result != null) {
+      setState(() => _locationPolygon = result);
     }
   }
 
@@ -162,6 +133,56 @@ class _AddFarmDialogState extends State<AddFarmDialog> {
     );
   }
 
+  Future<void> _saveFarm() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (!_formKey.currentState!.validate() || user == null) return;
+
+    final owner = _ownerController.text.trim();
+    final farmName = _farmNameController.text.trim();
+    final area = double.tryParse(_areaController.text.trim()) ?? 0;
+    final expectedHarvest = double.tryParse(_expectedHarvestAmountController.text.trim()) ?? 0;
+    final isOwnerSame = owner == _loggedInUserName;
+
+    if (!isOwnerSame && (_relationship == null || owner != widget.farmData?['ownerName'])) {
+      final relation = await _askRelationship();
+      if (relation == null || relation.isEmpty) return;
+      setState(() => _relationship = relation);
+    }
+
+    final farmData = {
+      'farmName': farmName,
+      'ownerName': owner,
+      'crop': _selectedCrop,
+      'area': area,
+      'unit': _unit,
+      'waterSource': _waterSource,
+      'organic': _isOrganic ? 'Yes' : 'No',
+      'plantingDate': _selectedPlantingDate.toIso8601String(),
+      'monthsBeforeHarvest': _monthsBeforeHarvest,
+      'expectedHarvestDate': DateFormat('yyyy-MM-dd').format(_expectedHarvestDate),
+      'expectedHarvestAmount': expectedHarvest,
+      'harvestUnit': _harvestUnit,
+      'locationPolygon': _locationPolygon?.map((e) => {'lat': e.latitude, 'lng': e.longitude}).toList(),
+      'createdAt': FieldValue.serverTimestamp(),
+    };
+
+    if (!isOwnerSame) farmData['relationship'] = _relationship;
+
+    final ref = FirebaseFirestore.instance.collection('users').doc(user.uid).collection('farms');
+    if (widget.farmId != null) {
+      await ref.doc(widget.farmId).update(farmData);
+    } else {
+      await ref.add(farmData);
+    }
+
+    if (mounted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('✅ Tagumpay!')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -171,114 +192,40 @@ class _AddFarmDialogState extends State<AddFarmDialog> {
         child: Form(
           key: _formKey,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextFormField(
-                controller: _farmNameController,
-                decoration: const InputDecoration(labelText: 'Pangalan ng Bukid'),
-                validator: (val) => val == null || val.isEmpty ? 'Required' : null,
-              ),
+              TextFormField(controller: _farmNameController, decoration: const InputDecoration(labelText: 'Pangalan ng Bukid'), validator: (val) => val!.isEmpty ? 'Required' : null),
+              TextFormField(controller: _ownerController, decoration: const InputDecoration(labelText: 'May-ari'), validator: (val) => val!.isEmpty ? 'Required' : null),
+              DropdownButtonFormField<String>(value: _selectedCrop, items: crops.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (val) => setState(() => _selectedCrop = val), decoration: const InputDecoration(labelText: 'Pananim'), validator: (val) => val == null ? 'Required' : null),
+              TextFormField(controller: _areaController, decoration: const InputDecoration(labelText: 'Sukat'), keyboardType: TextInputType.number),
+              DropdownButtonFormField(value: _unit, items: units.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (val) => setState(() => _unit = val!), decoration: const InputDecoration(labelText: 'Yunit')),
+              DropdownButtonFormField(value: _waterSource, items: waterSources.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (val) => setState(() => _waterSource = val!), decoration: const InputDecoration(labelText: 'Patubig')),
+              SwitchListTile(title: const Text('Organic'), value: _isOrganic, onChanged: (val) => setState(() => _isOrganic = val)),
+              ListTile(title: Text('📅 Pagtatanim: ${DateFormat('yyyy-MM-dd').format(_selectedPlantingDate)}'), trailing: const Icon(Icons.calendar_today), onTap: () async {
+                final date = await showDatePicker(context: context, initialDate: _selectedPlantingDate, firstDate: DateTime(2000), lastDate: DateTime(2100));
+                if (date != null) {
+                  setState(() {
+                    _selectedPlantingDate = date;
+                    _expectedHarvestDate = DateTime(date.year, date.month + _monthsBeforeHarvest, date.day);
+                  });
+                }
+              }),
+              DropdownButtonFormField<int>(value: _monthsBeforeHarvest, decoration: const InputDecoration(labelText: 'Buwan bago Anihan'), items: List.generate(6, (i) => i + 1).map((e) => DropdownMenuItem(value: e, child: Text('$e buwan'))).toList(), onChanged: (val) {
+                setState(() {
+                  _monthsBeforeHarvest = val!;
+                  _expectedHarvestDate = DateTime(_selectedPlantingDate.year, _selectedPlantingDate.month + val, _selectedPlantingDate.day);
+                });
+              }),
+              ListTile(title: Text('📅 Anihan: ${DateFormat('yyyy-MM-dd').format(_expectedHarvestDate)}'), trailing: const Icon(Icons.calendar_today), onTap: () async {
+                final date = await showDatePicker(context: context, initialDate: _expectedHarvestDate, firstDate: _selectedPlantingDate, lastDate: DateTime(2100));
+                if (date != null) setState(() => _expectedHarvestDate = date);
+              }),
+              TextFormField(controller: _expectedHarvestAmountController, decoration: const InputDecoration(labelText: 'Inaasahang Dami'), keyboardType: TextInputType.number),
+              DropdownButtonFormField(value: _harvestUnit, items: harvestUnits.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (val) => setState(() => _harvestUnit = val!), decoration: const InputDecoration(labelText: 'Unit')),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _ownerController,
-                decoration: const InputDecoration(labelText: 'Pangalan ng May-ari'),
-                validator: (val) => val == null || val.isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: _selectedCrop,
-                decoration: const InputDecoration(labelText: 'Piliin ang Pananim'),
-                items: crops.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                onChanged: (val) => setState(() => _selectedCrop = val),
-                validator: (val) => val == null ? 'Required' : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _areaController,
-                decoration: const InputDecoration(labelText: 'Sukat ng Sakahan'),
-                keyboardType: TextInputType.number,
-                validator: (val) => val == null || val.isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField(
-                value: _unit,
-                items: units.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                onChanged: (val) => setState(() => _unit = val!),
-                decoration: const InputDecoration(labelText: 'Unit'),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField(
-                value: _waterSource,
-                items: waterSources.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                onChanged: (val) => setState(() => _waterSource = val!),
-                decoration: const InputDecoration(labelText: 'Patubig'),
-              ),
-              const SizedBox(height: 16),
-              SwitchListTile(
-                title: const Text('Organic Farming'),
-                value: _isOrganic,
-                onChanged: (val) => setState(() => _isOrganic = val),
-              ),
-              ListTile(
-                title: Text('📅 Petsa ng Pagtatanim: ${DateFormat('yyyy-MM-dd').format(_selectedPlantingDate)}'),
-                trailing: const Icon(Icons.calendar_today),
-                onTap: () async {
-                  final date = await showDatePicker(
-                    context: context,
-                    initialDate: _selectedPlantingDate,
-                    firstDate: DateTime(2000),
-                    lastDate: DateTime(2100),
-                  );
-                  if (date != null) {
-                    setState(() {
-                      _selectedPlantingDate = date;
-                      _expectedHarvestDate = DateTime(date.year, date.month + _monthsBeforeHarvest, date.day);
-                    });
-                  }
-                },
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<int>(
-                value: _monthsBeforeHarvest,
-                decoration: const InputDecoration(labelText: 'Buwan bago Anihan'),
-                items: List.generate(6, (i) => i + 1).map((e) => DropdownMenuItem(value: e, child: Text('$e buwan'))).toList(),
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() {
-                      _monthsBeforeHarvest = val;
-                      _expectedHarvestDate = DateTime(_selectedPlantingDate.year, _selectedPlantingDate.month + val, _selectedPlantingDate.day);
-                    });
-                  }
-                },
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                title: Text('📅 Inaasahang Anihan: ${DateFormat('yyyy-MM-dd').format(_expectedHarvestDate)}'),
-                trailing: const Icon(Icons.calendar_month),
-                onTap: () async {
-                  final date = await showDatePicker(
-                    context: context,
-                    initialDate: _expectedHarvestDate,
-                    firstDate: _selectedPlantingDate,
-                    lastDate: DateTime(2100),
-                  );
-                  if (date != null) {
-                    setState(() => _expectedHarvestDate = date);
-                  }
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _expectedHarvestAmountController,
-                decoration: const InputDecoration(labelText: 'Inaasahang Dami ng Ani'),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField(
-                value: _harvestUnit,
-                items: harvestUnits.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                onChanged: (val) => setState(() => _harvestUnit = val!),
-                decoration: const InputDecoration(labelText: 'Unit ng Ani'),
+              ElevatedButton.icon(
+                onPressed: _selectLocation,
+                icon: const Icon(Icons.map),
+                label: Text(_locationPolygon == null ? 'Pumili ng Lokasyon' : 'Baguhin ang Lokasyon'),
               ),
             ],
           ),
