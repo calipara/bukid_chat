@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "372453215804",
+    "project_id": "mitbukidchat2025",
+    "storage_bucket": "mitbukidchat2025.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:372453215804:android:41a1ee974fd6fc7468fd39",
+        "android_client_info": {
+          "package_name": "com.mgc2025.bukidchat"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCy3830EzmHr-uo5yNZhw5HSHHz6XvL_N0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

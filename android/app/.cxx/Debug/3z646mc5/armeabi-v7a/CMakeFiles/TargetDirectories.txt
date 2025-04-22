@@ -1,0 +1,2 @@
+/Users/mgc/Development/projects/bukid_chat/android/app/.cxx/Debug/3z646mc5/armeabi-v7a/CMakeFiles/edit_cache.dir
+/Users/mgc/Development/projects/bukid_chat/android/app/.cxx/Debug/3z646mc5/armeabi-v7a/CMakeFiles/rebuild_cache.dir

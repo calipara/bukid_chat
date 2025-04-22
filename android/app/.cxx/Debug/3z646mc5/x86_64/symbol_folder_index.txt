@@ -1,0 +1,1 @@
+/Users/mgc/Development/projects/bukid_chat/build/app/intermediates/cxx/Debug/3z646mc5/obj/x86_64
