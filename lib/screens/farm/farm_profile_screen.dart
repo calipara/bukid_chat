@@ -94,70 +94,186 @@ class _FarmProfileScreenState extends State<FarmProfileScreen> with SingleTicker
     );
   }
 
-  Widget _buildFarmsList(List<QueryDocumentSnapshot> farms) {
-    return farms.isEmpty
-        ? const Center(child: Text('Wala pang bukid.'))
-        : ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: farms.length,
-            itemBuilder: (context, index) {
-              final doc = farms[index];
-              final data = doc.data() as Map<String, dynamic>;
-              return Card(
-                child: ListTile(
-                  title: Text(data['farmName'] ?? ''),
-                  subtitle: Text('${data['crop']} • ${data['area']} ${data['unit']}'),
-                  trailing: PopupMenuButton(
-                    onSelected: (value) {
-                      if (value == 'edit') {
-                        _showAddFarmDialog(farmData: data, farmId: doc.id);
-                      } else if (value == 'delete') {
-                        _confirmDelete(doc.id);
-                      }
-                    },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'edit', child: Text('Edit')),
-                      PopupMenuItem(value: 'delete', child: Text('Delete')),
-                    ],
-                  ),
-                  onTap: () {
-                    setState(() => _selectedFarm = data);
-                    _tabController.animateTo(1);
-                  },
+  //card list view
+Widget _buildFarmsList(List<QueryDocumentSnapshot> farms) {
+  return farms.isEmpty
+      ? const Center(child: Text('Wala pang bukid.'))
+      : ListView.builder(
+          padding: const EdgeInsets.all(12),
+          itemCount: farms.length,
+          itemBuilder: (context, index) {
+            final doc = farms[index];
+            final data = doc.data() as Map<String, dynamic>;
+            final crop = (data['crop'] ?? '').toString().toLowerCase();
+            final imagePath = crop == 'rice'
+                ? 'assets/images/rice_banner.jpg'
+                : crop == 'corn'
+                    ? 'assets/images/corn_banner.jpg'
+                    : 'assets/images/farm_add.png';
+
+            return GestureDetector(
+              onTap: () {
+                setState(() => _selectedFarm = data);
+                _tabController.animateTo(1);
+              },
+              child: Card(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 📸 Banner Image with gradient
+                    Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                          child: Image.asset(
+                            imagePath,
+                            height: 100,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          height: 100,
+                          child: Container(
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Colors.black54, Colors.transparent],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                              ),
+                              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit, color: Colors.white),
+                                onPressed: () => _showAddFarmDialog(farmData: data, farmId: doc.id),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete, color: Colors.white),
+                                onPressed: () => _confirmDelete(doc.id),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // 📄 Text info
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            data['farmName'] ?? '',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${data['crop']} • ${data['area']} ${data['unit']}',
+                            style: const TextStyle(color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              );
-            },
-          );
-  }
+              ),
+            );
+          },
+        );
+}
+
+
 
   Widget _buildFarmDetails(Map<String, dynamic>? data) {
-    if (data == null) {
-      return const Center(child: Text('Pumili ng bukid para makita ang detalye.'));
-    }
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(data['farmName'] ?? '', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Text('May-ari: ${data['ownerName']}'),
-              Text('Pananim: ${data['crop']}'),
-              Text('Sukat: ${data['area']} ${data['unit']}'),
-              Text('Patubig: ${data['waterSource']}'),
-              Text('Organic: ${data['organic']}'),
-              Text('Pagtatanim: ${DateFormat('yyyy-MM-dd').format(DateTime.parse(data['plantingDate']))}'),
-              Text('Anihan: ${data['expectedHarvestDate']}'),
-              Text('Dami: ${data['expectedHarvestAmount']} ${data['harvestUnit']}'),
-              if (data['relationship'] != null)
-                Text('Relasyon sa May-ari: ${data['relationship']}'),
-            ],
+  if (data == null) {
+    return const Center(child: Text('Pumili ng bukid para makita ang detalye.'));
+  }
+
+  Widget _detailItem(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: Colors.green, size: 30),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: Colors.black54,
+                    )),
+                const SizedBox(height: 2),
+                Text(value,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    )),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
+
+  return SingleChildScrollView(
+    padding: const EdgeInsets.all(16),
+    child: Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Title
+            Text(
+              data['farmName'] ?? '',
+              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.green),
+            ),
+            const SizedBox(height: 20),
+            const Divider(),
+
+            // Farm Details with icons
+            _detailItem(Icons.person, 'May-ari', data['ownerName'] ?? ''),
+            _detailItem(Icons.eco, 'Pananim', data['crop'] ?? ''),
+            _detailItem(Icons.square_foot, 'Sukat ng Sakahan', '${data['area']} ${data['unit']}'),
+            _detailItem(Icons.water_drop, 'Patubig', data['waterSource'] ?? ''),
+            _detailItem(Icons.nature, 'Organic Farming', data['organic'] ?? ''),
+            _detailItem(Icons.calendar_today, 'Pagtatanim',
+                DateFormat('yyyy-MM-dd').format(DateTime.parse(data['plantingDate']))),
+            _detailItem(Icons.event, 'Anihan', data['expectedHarvestDate'] ?? ''),
+            _detailItem(Icons.shopping_bag, 'Dami ng Ani',
+                '${data['expectedHarvestAmount']} ${data['harvestUnit']}'),
+            if (data['relationship'] != null)
+              _detailItem(Icons.family_restroom, 'Relasyon sa May-ari', data['relationship']),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 }
