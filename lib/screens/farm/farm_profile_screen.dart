@@ -3,6 +3,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'add_farm_dialog.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'farm_map_screen.dart';
+
+
 
 class FarmProfileScreen extends StatefulWidget {
   const FarmProfileScreen({super.key});
@@ -172,25 +176,66 @@ Widget _buildFarmsList(List<QueryDocumentSnapshot> farms) {
 
                     // 📄 Text info
                     Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            data['farmName'] ?? '',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${data['crop']} • ${data['area']} ${data['unit']}',
-                            style: const TextStyle(color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                    ),
+  padding: const EdgeInsets.all(16),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        data['farmName'] ?? '',
+        style: const TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      const SizedBox(height: 4),
+      Text(
+        '${data['crop']} • ${data['area']} ${data['unit']}',
+        style: const TextStyle(color: Colors.grey),
+      ),
+      const SizedBox(height: 12),
+
+      // 👉 Location View Button
+      InkWell(
+        onTap: () {
+          final polygon = (data['locationPolygon'] as List?)
+              ?.map((p) => LatLng(p['lat'], p['lng']))
+              .toList();
+          final center = data['locationCenter'] != null
+              ? LatLng(data['locationCenter']['lat'], data['locationCenter']['lng'])
+              : null;
+
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => FarmMapScreen(
+                existingPolygon: polygon,
+                existingCenter: center,
+                onSave: (_, __) {}, // dummy
+              ),
+            ),
+          );
+        },
+        child: Row(
+          children: const [
+            Icon(Icons.location_on, color: Colors.green),
+            SizedBox(width: 6),
+            Text(
+              'Lokasyon',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.green,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ],
+  ),
+),
+
+
+
+
                   ],
                 ),
               ),
